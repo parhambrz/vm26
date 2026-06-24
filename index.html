@@ -58,8 +58,11 @@
   .standing .stat { color: var(--muted); font-variant-numeric: tabular-nums; }
   .q1 { background: var(--green-bg); }
   .q3 { background: var(--amber-bg); }
+  .third-rank { font-size: 10px; color: var(--muted); font-weight: 500; margin-left: 5px; padding: 0 4px; border-radius: 999px; border: 1px solid var(--line); }
+  .third-rank.in { color: #fbbf24; border-color: rgba(251,191,36,.45); }
   .fixture { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 3px 0; }
-  .fixture .t { width: 78px; }
+  .fixture-date { color: var(--muted); font-size: 10px; margin: 6px 0 1px; text-align: center; }
+  .fixture .t { width: 92px; }
   .fixture .t.left { text-align: right; }
   .fixture .dash { color: var(--muted); }
   input.score {
@@ -77,6 +80,7 @@
   .col-matches { display: flex; flex-direction: column; gap: 10px; justify-content: space-around; flex: 1; }
   .final-col { display: flex; flex-direction: column; justify-content: center; }
   .match { background: var(--card); border-radius: 6px; width: 124px; box-shadow: 0 1px 2px rgba(0,0,0,.4); overflow: hidden; }
+  .match-date { font-size: 9px; color: var(--muted); text-align: center; padding: 2px 4px 0; letter-spacing: .02em; }
   .match-row { display: flex; align-items: center; justify-content: space-between; gap: 5px; padding: 4px 7px; font-size: 11px; }
   .match-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
   .match-row.winner { background: var(--win); font-weight: 600; }
@@ -141,10 +145,32 @@
   };
 
   // -------------------------------
+  // FLAGS (emoji prefix per team)
+  // -------------------------------
+  var FLAGS = {
+    "Mexico":"\ud83c\uddf2\ud83c\uddfd","South Africa":"\ud83c\uddff\ud83c\udde6","South Korea":"\ud83c\uddf0\ud83c\uddf7","Czechia":"\ud83c\udde8\ud83c\uddff",
+    "Canada":"\ud83c\udde8\ud83c\udde6","Switzerland":"\ud83c\udde8\ud83c\udded","Qatar":"\ud83c\uddf6\ud83c\udde6","Bosnia":"\ud83c\udde7\ud83c\udde6",
+    "Brazil":"\ud83c\udde7\ud83c\uddf7","Morocco":"\ud83c\uddf2\ud83c\udde6","Scotland":"\ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc73\udb40\udc63\udb40\udc74\udb40\udc7f","Haiti":"\ud83c\udded\ud83c\uddf9",
+    "USA":"\ud83c\uddfa\ud83c\uddf8","Australia":"\ud83c\udde6\ud83c\uddfa","Paraguay":"\ud83c\uddf5\ud83c\uddfe","Turkiye":"\ud83c\uddf9\ud83c\uddf7",
+    "Germany":"\ud83c\udde9\ud83c\uddea","Ecuador":"\ud83c\uddea\ud83c\udde8","Ivory Coast":"\ud83c\udde8\ud83c\uddee","Curacao":"\ud83c\udde8\ud83c\uddfc",
+    "Netherlands":"\ud83c\uddf3\ud83c\uddf1","Japan":"\ud83c\uddef\ud83c\uddf5","Sweden":"\ud83c\uddf8\ud83c\uddea","Tunisia":"\ud83c\uddf9\ud83c\uddf3",
+    "Belgium":"\ud83c\udde7\ud83c\uddea","Iran":"\ud83c\uddee\ud83c\uddf7","Egypt":"\ud83c\uddea\ud83c\uddec","New Zealand":"\ud83c\uddf3\ud83c\uddff",
+    "Spain":"\ud83c\uddea\ud83c\uddf8","Uruguay":"\ud83c\uddfa\ud83c\uddfe","Saudi Arabia":"\ud83c\uddf8\ud83c\udde6","Cape Verde":"\ud83c\udde8\ud83c\uddfb",
+    "France":"\ud83c\uddeb\ud83c\uddf7","Senegal":"\ud83c\uddf8\ud83c\uddf3","Iraq":"\ud83c\uddee\ud83c\uddf6","Norway":"\ud83c\uddf3\ud83c\uddf4",
+    "Argentina":"\ud83c\udde6\ud83c\uddf7","Algeria":"\ud83c\udde9\ud83c\uddff","Austria":"\ud83c\udde6\ud83c\uddf9","Jordan":"\ud83c\uddef\ud83c\uddf4",
+    "Portugal":"\ud83c\uddf5\ud83c\uddf9","DR Congo":"\ud83c\udde8\ud83c\udde9","Uzbekistan":"\ud83c\uddfa\ud83c\uddff","Colombia":"\ud83c\udde8\ud83c\uddf4",
+    "England":"\ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc65\udb40\udc6e\udb40\udc67\udb40\udc7f","Croatia":"\ud83c\udded\ud83c\uddf7","Ghana":"\ud83c\uddec\ud83c\udded","Panama":"\ud83c\uddf5\ud83c\udde6"
+  };
+  // Team name with its flag prefixed (for display only).
+  function teamLabel(name){
+    if (name == null) return "\u2014";
+    var f = FLAGS[name];
+    return (f ? f + " " : "") + name;
+  }
   // REAL RESULTS (2026 World Cup, source: Wikipedia)
   // Keyed by group -> row index in buildGroupMatches order:
   //  0:t0-t1  1:t2-t3  2:t0-t2  3:t1-t3  4:t0-t3  5:t1-t2
-  // Only matchdays 1-2 are complete as of June 22, 2026.
+  // Only matchdays 1-2 are complete as of June 23, 2026.
   // -------------------------------
   var RESULTS = {
     A:{0:[2,0],1:[2,1],2:[1,0],3:[1,1]},
@@ -155,12 +181,100 @@
     F:{0:[2,2],1:[5,1],2:[5,1],3:[4,0]},
     G:{0:[0,0],1:[3,1],2:[1,1],3:[2,2]},
     H:{2:[4,0],3:[2,2],4:[0,0],5:[1,1]},
-    I:{0:[3,1],1:[1,4]},
-    J:{0:[3,0],1:[3,1]},
-    K:{0:[1,1],1:[1,3]},
-    L:{0:[4,2],1:[1,0]}
+    I:{0:[3,1],1:[1,4],2:[3,0],3:[2,3]},
+    J:{0:[3,0],1:[3,1],2:[2,0],3:[2,1]},
+    K:{0:[1,1],1:[1,3],2:[5,0],3:[0,1]},
+    L:{0:[4,2],1:[1,0],2:[0,0],3:[1,0]}
   };
 
+  // -------------------------------
+  // REAL KNOCKOUT RESULTS (2026 World Cup). Keyed by an order-independent
+  // team-pair key -> { teamName: goals }. The knockout stage hasn't started
+  // yet, so this is empty; the "Fetch live results" button fills it in (and
+  // you can hardcode finished KO games here for offline use, just like
+  // RESULTS above). A locked KO game overrides its prediction and can't be
+  // edited, exactly like a played group game.
+  // -------------------------------
+  var KO_RESULTS = {};
+  function koPairKey(a, b){ return [a, b].slice().sort().join("\u0001"); }
+  function koResultFor(a, b){
+    if (a == null || b == null) return null;
+    var r = KO_RESULTS[koPairKey(a, b)];
+    if (!r || r[a] == null || r[b] == null) return null;
+    return [r[a], r[b]];
+  }
+
+  // -------------------------------
+  // KICKOFF SCHEDULE (UTC, source: ESPN). group -> row index -> ISO datetime.
+  // Used to display kickoff time (CET) and order group fixtures by date.
+  // -------------------------------
+  var SCHEDULE = {
+    A:{0:"2026-06-11T19:00Z",1:"2026-06-12T02:00Z",2:"2026-06-19T01:00Z",3:"2026-06-18T16:00Z",4:"2026-06-25T01:00Z",5:"2026-06-25T01:00Z"},
+    B:{0:"2026-06-24T19:00Z",1:"2026-06-24T19:00Z",2:"2026-06-18T22:00Z",3:"2026-06-18T19:00Z",4:"2026-06-12T19:00Z",5:"2026-06-13T19:00Z"},
+    C:{0:"2026-06-13T22:00Z",1:"2026-06-14T01:00Z",2:"2026-06-24T22:00Z",3:"2026-06-24T22:00Z",4:"2026-06-20T00:30Z",5:"2026-06-19T22:00Z"},
+    D:{0:"2026-06-19T19:00Z",1:"2026-06-20T03:00Z",2:"2026-06-13T01:00Z",3:"2026-06-14T04:00Z",4:"2026-06-26T02:00Z",5:"2026-06-26T02:00Z"},
+    E:{0:"2026-06-25T20:00Z",1:"2026-06-25T20:00Z",2:"2026-06-20T20:00Z",3:"2026-06-21T00:00Z",4:"2026-06-14T17:00Z",5:"2026-06-14T23:00Z"},
+    F:{0:"2026-06-14T20:00Z",1:"2026-06-15T02:00Z",2:"2026-06-20T17:00Z",3:"2026-06-21T04:00Z",4:"2026-06-25T23:00Z",5:"2026-06-25T23:00Z"},
+    G:{0:"2026-06-21T19:00Z",1:"2026-06-22T01:00Z",2:"2026-06-15T19:00Z",3:"2026-06-16T01:00Z",4:"2026-06-27T03:00Z",5:"2026-06-27T03:00Z"},
+    H:{0:"2026-06-27T00:00Z",1:"2026-06-27T00:00Z",2:"2026-06-21T16:00Z",3:"2026-06-21T22:00Z",4:"2026-06-15T16:00Z",5:"2026-06-15T22:00Z"},
+    I:{0:"2026-06-16T19:00Z",1:"2026-06-16T22:00Z",2:"2026-06-22T21:00Z",3:"2026-06-23T00:00Z",4:"2026-06-26T19:00Z",5:"2026-06-26T19:00Z"},
+    J:{0:"2026-06-17T01:00Z",1:"2026-06-17T04:00Z",2:"2026-06-22T17:00Z",3:"2026-06-23T03:00Z",4:"2026-06-28T02:00Z",5:"2026-06-28T02:00Z"},
+    K:{0:"2026-06-17T17:00Z",1:"2026-06-18T02:00Z",2:"2026-06-23T17:00Z",3:"2026-06-24T02:00Z",4:"2026-06-27T23:30Z",5:"2026-06-27T23:30Z"},
+    L:{0:"2026-06-17T20:00Z",1:"2026-06-17T23:00Z",2:"2026-06-23T20:00Z",3:"2026-06-23T23:00Z",4:"2026-06-27T21:00Z",5:"2026-06-27T21:00Z"}
+  };
+  // Format a kickoff ISO datetime as a Central European (Europe/Paris) day +
+  // time string, with the correct CET/CEST label for the date.
+  function fmtKickoff(iso){
+    if (!iso) return "";
+    if (/T\d{2}:\d{2}Z$/.test(iso)) iso = iso.replace("Z", ":00Z");
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var day = d.toLocaleDateString("en-GB", { weekday:"short", day:"2-digit", month:"short", timeZone:"Europe/Paris" });
+    var time = d.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit", hour12:false, timeZone:"Europe/Paris" });
+    var tz = "CET";
+    try {
+      tz = new Intl.DateTimeFormat("en-GB", { timeZone:"Europe/Paris", timeZoneName:"short" })
+        .formatToParts(d).filter(function(p){ return p.type === "timeZoneName"; })[0].value;
+    } catch(e){}
+    return day + " \u00b7 " + time + " " + tz;
+  }
+  // Row indices of a group, ordered by kickoff date (oldest first).
+  function groupOrder(name){
+    var order = [0,1,2,3,4,5];
+    var sched = SCHEDULE[name] || {};
+    return order.slice().sort(function(a, b){
+      var ta = sched[a] || "", tb = sched[b] || "";
+      if (ta === tb) return a - b;
+      return ta < tb ? -1 : 1;
+    });
+  }
+
+  // -------------------------------
+  // KNOCKOUT SCHEDULE (UTC, source: ESPN). Keyed by bracket slot id.
+  // R32 dates map exactly to each fixture; later rounds use the official
+  // per-round kickoff dates assigned in bracket order.
+  // -------------------------------
+  var KO_SCHEDULE = {
+    "r32-0":"2026-06-29T20:30Z","r32-1":"2026-06-30T21:00Z","r32-2":"2026-06-28T19:00Z","r32-3":"2026-06-30T01:00Z",
+    "r32-4":"2026-07-02T23:00Z","r32-5":"2026-07-02T19:00Z","r32-6":"2026-07-02T00:00Z","r32-7":"2026-07-01T20:00Z",
+    "r32-8":"2026-06-29T17:00Z","r32-9":"2026-06-30T17:00Z","r32-10":"2026-07-01T01:00Z","r32-11":"2026-07-01T16:00Z",
+    "r32-12":"2026-07-03T22:00Z","r32-13":"2026-07-03T18:00Z","r32-14":"2026-07-03T03:00Z","r32-15":"2026-07-04T01:30Z",
+    "r16-0":"2026-07-04T17:00Z","r16-1":"2026-07-04T21:00Z","r16-2":"2026-07-05T20:00Z","r16-3":"2026-07-06T00:00Z",
+    "r16-4":"2026-07-06T19:00Z","r16-5":"2026-07-07T00:00Z","r16-6":"2026-07-07T16:00Z","r16-7":"2026-07-07T20:00Z",
+    "qf-0":"2026-07-09T20:00Z","qf-1":"2026-07-10T19:00Z","qf-2":"2026-07-11T21:00Z","qf-3":"2026-07-12T01:00Z",
+    "sf-0":"2026-07-14T19:00Z","sf-1":"2026-07-15T19:00Z",
+    "final-0":"2026-07-19T19:00Z"
+  };
+  // Compact kickoff label (day + time, no weekday) for the tight bracket cards.
+  function fmtKickoffShort(iso){
+    if (!iso) return "";
+    if (/T\d{2}:\d{2}Z$/.test(iso)) iso = iso.replace("Z", ":00Z");
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var day = d.toLocaleDateString("en-GB", { day:"2-digit", month:"short", timeZone:"Europe/Paris" });
+    var time = d.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit", hour12:false, timeZone:"Europe/Paris" });
+    return day + " " + time;
+  }
   // Overwrite only fixtures that have actually been played; leave the
   // user's predictions untouched for games not yet played.
   function isPlayed(group, i){ return !!(RESULTS[group] && RESULTS[group][i]); }
@@ -325,9 +439,18 @@
     open: {}
   };
 
+  // Restore real knockout results saved in this browser (merged on top of any
+  // hardcoded ones), so locked KO games survive a reload.
+  (function restoreSavedKO(){
+    var saved = loadSaved();
+    if (saved && saved.koResults){
+      Object.keys(saved.koResults).forEach(function(k){ KO_RESULTS[k] = saved.koResults[k]; });
+    }
+  })();
+
   function saveState(){
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ matches: state.matches, ko: state.ko }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ matches: state.matches, ko: state.ko, koResults: KO_RESULTS }));
     } catch(e){}
   }
 
@@ -335,6 +458,7 @@
   // RENDER
   // -------------------------------
   var qualThirds = {};
+  var thirdRank = {};
 
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
@@ -346,20 +470,29 @@
       standings.forEach(function(t, i){
         var cls = i < 2 ? "q1" : (i === 2 && qualThirds[t.team] ? "q3" : "");
         var gd = t.gf - t.ga;
-        rows += '<div class="standing ' + cls + '"><span>' + esc(t.team) + '</span>' +
+        var badge = "";
+        if (i === 2 && thirdRank[g.name]){
+          badge = ' <span class="third-rank' + (qualThirds[t.team] ? ' in' : '') +
+                  '" title="Ranking of this group\'s 3rd-placed team among all 12 thirds (top 8 qualify)">3rd #' +
+                  thirdRank[g.name] + '/12</span>';
+        }
+        rows += '<div class="standing ' + cls + '"><span>' + esc(teamLabel(t.team)) + badge + '</span>' +
                 '<span class="stat">' + t.pts + ' pts \u00b7 ' + (gd>0?'+':'') + gd + '</span></div>';
       });
     } else {
-      state.matches[g.name].forEach(function(m, i){
+      groupOrder(g.name).forEach(function(i){
+        var m = state.matches[g.name][i];
         var played = isPlayed(g.name, i);
         var lk = played ? ' disabled title="Played result"' : '';
         var lc = played ? ' locked' : '';
-        rows += '<div class="fixture">' +
-          '<span class="t left">' + esc(m[0]) + '</span>' +
+        var when = fmtKickoff(SCHEDULE[g.name] && SCHEDULE[g.name][i]);
+        rows += (when ? '<div class="fixture-date">' + esc(when) + '</div>' : '') +
+          '<div class="fixture">' +
+          '<span class="t left">' + esc(teamLabel(m[0])) + '</span>' +
           '<input class="score'+lc+'" type="text" inputmode="numeric" data-kind="group" data-fid="g-'+g.name+'-'+i+'-1" data-group="'+g.name+'" data-row="'+i+'" data-idx="1" value="'+(m[1]==null?'':m[1])+'"'+lk+'>' +
           '<span class="dash">-</span>' +
           '<input class="score'+lc+'" type="text" inputmode="numeric" data-kind="group" data-fid="g-'+g.name+'-'+i+'-2" data-group="'+g.name+'" data-row="'+i+'" data-idx="2" value="'+(m[2]==null?'':m[2])+'"'+lk+'>' +
-          '<span class="t">' + esc(m[3]) + '</span>' +
+          '<span class="t">' + esc(teamLabel(m[3])) + '</span>' +
         '</div>';
       });
     }
@@ -387,8 +520,11 @@
     return [ga, gb];
   }
 
-  // Effective KO score = manual override if set, else odds-based prediction.
+  // Effective KO score = real played result if known, else manual override,
+  // else odds-based prediction.
   function effKO(a, b, id){
+    var real = koResultFor(a, b);
+    if (real) return real;
     var ov = state.ko[id] || [null, null];
     if (a == null || b == null) return [ov[0], ov[1]];
     var p = predictKO(a, b);
@@ -398,13 +534,18 @@
   function renderMatch(m, id){
     var sc = effKO(m[0], m[1], id);
     var s1 = sc[0], s2 = sc[1];
+    var locked = !!koResultFor(m[0], m[1]);
     var w = (s1 != null && s2 != null && s1 !== s2) ? (s1 > s2 ? "a" : "b") : null;
     function row(name, val, idx, side){
+      var lc = locked ? " locked" : "";
+      var lk = locked ? ' disabled title="Played result"' : '';
       return '<div class="match-row'+(w===side?' winner':'')+'">' +
-        '<span class="name">'+esc(name||"\u2014")+'</span>' +
-        '<input class="score" type="text" inputmode="numeric" data-kind="ko" data-fid="k-'+id+'-'+idx+'" data-id="'+id+'" data-idx="'+idx+'" value="'+(val==null?'':val)+'"></div>';
+        '<span class="name">'+esc(teamLabel(name))+'</span>' +
+        '<input class="score'+lc+'" type="text" inputmode="numeric" data-kind="ko" data-fid="k-'+id+'-'+idx+'" data-id="'+id+'" data-idx="'+idx+'" value="'+(val==null?'':val)+'"'+lk+'></div>';
     }
-    return '<div class="match">' + row(m[0], s1, 0, "a") + row(m[1], s2, 1, "b") + '</div>';
+    var when = fmtKickoffShort(KO_SCHEDULE[id]);
+    var dateHtml = when ? '<div class="match-date">' + esc(when) + '</div>' : '';
+    return '<div class="match">' + dateHtml + row(m[0], s1, 0, "a") + row(m[1], s2, 1, "b") + '</div>';
   }
 
   function pairNext(arr){
@@ -429,6 +570,15 @@
     qualThirds = {};
     bestThirdGroups(byGroup).forEach(function(g){ qualThirds[byGroup[g][2].team] = true; });
 
+    // Rank every group's 3rd-placed team against the other thirds (1 = best).
+    thirdRank = {};
+    groups.map(function(g){
+        var t = byGroup[g.name][2];
+        return { g:g.name, pts:t.pts, gf:t.gf, ga:t.ga };
+      })
+      .sort(function(a,b){ return b.pts-a.pts || (b.gf-b.ga)-(a.gf-a.ga) || b.gf-a.gf; })
+      .forEach(function(t, i){ thirdRank[t.g] = i + 1; });
+
     var r32 = buildR32(byGroup);
     var r32W = r32.map(function(m,i){ return koWinner(m[0], m[1], "r32-"+i); });
     var r16  = pairNext(r32W);
@@ -440,7 +590,7 @@
     var fin  = pairNext(sfW);
     var champ = fin[0] ? koWinner(fin[0][0], fin[0][1], "final-0") : null;
 
-    document.getElementById("champion").textContent = champ ? ("\ud83c\udfc6 Champion: " + champ) : "";
+    document.getElementById("champion").textContent = champ ? ("\ud83c\udfc6 Champion: " + teamLabel(champ)) : "";
 
     var groupsHtml = '<div class="groups">' + groups.map(renderGroup).join("") + '</div>';
 
@@ -552,14 +702,31 @@
     }
     return null;
   }
-  // Merge one played group-stage game into RESULTS (truth). Returns true the
-  // first time a given fixture is recorded this run (so the two data sources
-  // don't double-count the same match).
-  function recordMatch(homeRaw, awayRaw, hs, as, seen){
+  // Group stage ends June 27, 2026; knockouts start June 28. A fixture on or
+  // after this date is a knockout game, never a group game.
+  var KO_CUTOFF = "2026-06-28";
+  // Merge one played game into the right place (RESULTS for group games,
+  // KO_RESULTS for knockout games). Returns true the first time a given
+  // fixture is recorded this run (so the two data sources don't double-count).
+  // dateISO (optional) disambiguates a same-group knockout meeting (e.g. two
+  // group-mates in the final) from their single group-stage game.
+  function recordMatch(homeRaw, awayRaw, hs, as, seen, dateISO){
     if (hs == null || hs === "" || as == null || as === "") return false;
-    var loc = teamLocation(mapName(homeRaw));
-    var loc2 = teamLocation(mapName(awayRaw));
-    if (!loc || !loc2 || loc.group !== loc2.group) return false; // not a group game we model
+    var home = mapName(homeRaw), away = mapName(awayRaw);
+    var loc = teamLocation(home);
+    var loc2 = teamLocation(away);
+    if (!loc || !loc2) return false; // unknown team
+    var isKnockout = (loc.group !== loc2.group) ||
+                     (dateISO && String(dateISO).slice(0, 10) >= KO_CUTOFF);
+    if (isKnockout){
+      // Knockout game. Lock it by team pair.
+      var kkey = koPairKey(home, away);
+      var obj = {}; obj[home] = +hs; obj[away] = +as;
+      KO_RESULTS[kkey] = obj;
+      var isNewK = seen ? !seen["ko-" + kkey] : true;
+      if (seen) seen["ko-" + kkey] = true;
+      return isNewK;
+    }
     var rp = rowForPair(loc.idx, loc2.idx);
     if (!rp) return false;
     var gA, gB;
@@ -575,7 +742,7 @@
   function applyTSDB(events, seen){
     var n = 0;
     (events || []).forEach(function(e){
-      if (recordMatch(e.strHomeTeam, e.strAwayTeam, e.intHomeScore, e.intAwayScore, seen)) n++;
+      if (recordMatch(e.strHomeTeam, e.strAwayTeam, e.intHomeScore, e.intAwayScore, seen, e.dateEvent)) n++;
     });
     return n;
   }
@@ -590,7 +757,7 @@
       var h = c.filter(function(x){ return x.homeAway === "home"; })[0];
       var a = c.filter(function(x){ return x.homeAway === "away"; })[0];
       if (!h || !a) return;
-      if (recordMatch(h.team.displayName, a.team.displayName, h.score, a.score, seen)) n++;
+      if (recordMatch(h.team.displayName, a.team.displayName, h.score, a.score, seen, e.date)) n++;
     });
     return n;
   }
