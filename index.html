@@ -74,17 +74,25 @@
   /* bracket */
   .bracket-section { margin-top: 36px; }
   .bracket { display: flex; justify-content: center; align-items: stretch; gap: 10px; overflow-x: auto; padding-bottom: 16px; }
-  .half { display: flex; gap: 10px; }
+  .half { display: flex; gap: 10px; flex: 0 0 auto; }
   .roundcol { display: flex; flex-direction: column; }
   .col-label { text-align: center; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
   .col-matches { display: flex; flex-direction: column; gap: 10px; justify-content: space-around; flex: 1; }
-  .final-col { display: flex; flex-direction: column; justify-content: center; }
+  .final-col { display: flex; flex-direction: column; justify-content: center; flex: 0 0 auto; }
   .match { background: var(--card); border-radius: 6px; width: 124px; box-shadow: 0 1px 2px rgba(0,0,0,.4); overflow: hidden; }
   .match-date { font-size: 9px; color: var(--muted); text-align: center; padding: 2px 4px 0; letter-spacing: .02em; }
   .match-row { display: flex; align-items: center; justify-content: space-between; gap: 5px; padding: 4px 7px; font-size: 11px; }
   .match-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
   .match-row.winner { background: var(--win); font-weight: 600; }
   .match-row input.score { width: 24px; flex: 0 0 auto; }
+  @media (max-width: 900px) {
+    .bracket {
+      justify-content: flex-start;
+      padding-left: 2px;
+      padding-right: 2px;
+    }
+    .roundcol { flex: 0 0 auto; }
+  }
 </style>
 </head>
 <body>
