@@ -85,6 +85,23 @@
   .match-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
   .match-row.winner { background: var(--win); font-weight: 600; }
   .match-row input.score { width: 24px; flex: 0 0 auto; }
+  .tb-wrap { border-top: 1px solid var(--line); padding: 4px 6px 6px; }
+  .tb-label { font-size: 9px; color: var(--muted); text-align: center; margin: 0 0 4px; letter-spacing: .02em; }
+  .tb-actions { display: flex; gap: 4px; }
+  .tb-btn {
+    flex: 1 1 0;
+    background: var(--card2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 4px;
+    font: 10px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tb-btn.active { border-color: var(--win); background: rgba(5,150,105,.22); }
   @media (max-width: 900px) {
     .bracket {
       justify-content: flex-start;
@@ -197,17 +214,22 @@
 
   // -------------------------------
   // REAL KNOCKOUT RESULTS (2026 World Cup). Keyed by an order-independent
-  // team-pair key -> { teamName: goals }. The knockout stage hasn't started
-  // yet, so this is empty; the "Fetch live results" button fills it in (and
-  // you can hardcode finished KO games here for offline use, just like
-  // RESULTS above). A locked KO game overrides its prediction and can't be
-  // edited, exactly like a played group game.
+  // team-pair key -> { teamName: goals, winner?: teamName, method?: "pens"|"aet", pens?: {teamName:number} }.
+  // The knockout stage hasn't started yet, so this is empty; the "Fetch live
+  // results" button fills it in (and you can hardcode finished KO games here
+  // for offline use, just like RESULTS above). A locked KO game overrides its
+  // prediction and can't be edited, exactly like a played group game.
   // -------------------------------
   var KO_RESULTS = {};
   function koPairKey(a, b){ return [a, b].slice().sort().join("\u0001"); }
-  function koResultFor(a, b){
+  function koEntry(a, b){
     if (a == null || b == null) return null;
     var r = KO_RESULTS[koPairKey(a, b)];
+    if (!r || r[a] == null || r[b] == null) return null;
+    return r;
+  }
+  function koResultFor(a, b){
+    var r = koEntry(a, b);
     if (!r || r[a] == null || r[b] == null) return null;
     return [r[a], r[b]];
   }
@@ -592,6 +614,7 @@
   var state = {
     matches: initialMatches(),
     ko: (loadSaved() && loadSaved().ko) || {},
+    koTB: (loadSaved() && loadSaved().koTB) || {},
     open: {}
   };
 
@@ -606,7 +629,7 @@
 
   function saveState(){
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ matches: state.matches, ko: state.ko, koResults: KO_RESULTS }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ matches: state.matches, ko: state.ko, koTB: state.koTB, koResults: KO_RESULTS }));
     } catch(e){}
   }
 
@@ -660,8 +683,19 @@
   function koWinner(a, b, id){
     var sc = effKO(a, b, id);
     var s1 = sc[0], s2 = sc[1];
-    if (s1 == null || s2 == null || s1 === s2) return null;
-    return s1 > s2 ? a : b;
+    if (s1 == null || s2 == null) return null;
+    if (s1 !== s2) return s1 > s2 ? a : b;
+
+    var real = koEntry(a, b);
+    if (real && (real.winner === a || real.winner === b)) return real.winner;
+
+    var picked = state.koTB[id];
+    if (picked === 0 || picked === 1) return picked === 0 ? a : b;
+
+    if (a == null || b == null) return null;
+    var ra = RATINGS[a] != null ? RATINGS[a] : 70;
+    var rb = RATINGS[b] != null ? RATINGS[b] : 70;
+    return ra >= rb ? a : b;
   }
 
   // Predicted knockout scoreline (no draws allowed in KO).
@@ -691,7 +725,13 @@
     var sc = effKO(m[0], m[1], id);
     var s1 = sc[0], s2 = sc[1];
     var locked = !!koResultFor(m[0], m[1]);
+    var real = koEntry(m[0], m[1]);
+    var realWinner = real && (real.winner === m[0] || real.winner === m[1]) ? real.winner : null;
     var w = (s1 != null && s2 != null && s1 !== s2) ? (s1 > s2 ? "a" : "b") : null;
+    if (!w){
+      var kW = koWinner(m[0], m[1], id);
+      if (kW && m[0] && m[1]) w = (kW === m[0] ? "a" : "b");
+    }
     function row(name, val, idx, side){
       var lc = locked ? " locked" : "";
       var lk = locked ? ' disabled title="Played result"' : '';
@@ -699,9 +739,38 @@
         '<span class="name">'+esc(teamLabel(name))+'</span>' +
         '<input class="score'+lc+'" type="text" inputmode="numeric" data-kind="ko" data-fid="k-'+id+'-'+idx+'" data-id="'+id+'" data-idx="'+idx+'" value="'+(val==null?'':val)+'"'+lk+'></div>';
     }
+    var tieHtml = "";
+    if (s1 != null && s2 != null && s1 === s2 && m[0] && m[1]){
+      var tieLabel = "Tie-break winner";
+      var penTxt = "";
+      if (real && real.pens && real.pens[m[0]] != null && real.pens[m[1]] != null){
+        penTxt = " (pens " + real.pens[m[0]] + "-" + real.pens[m[1]] + ")";
+      } else if (real && real.method === "pens"){
+        penTxt = " (pens)";
+      } else if (real && real.method === "aet"){
+        penTxt = " (AET)";
+      } else if (!locked){
+        penTxt = " (choose)";
+      } else {
+        penTxt = " (auto)";
+      }
+      if (locked && realWinner){
+        tieHtml = '<div class="tb-wrap"><div class="tb-label">' + esc(tieLabel + penTxt + ': ' + teamLabel(realWinner)) + '</div></div>';
+      } else {
+        if (locked && !realWinner) penTxt = " (feed missing winner - choose)";
+        tieHtml =
+          '<div class="tb-wrap">' +
+            '<div class="tb-label">' + esc(tieLabel + penTxt) + '</div>' +
+            '<div class="tb-actions">' +
+              '<button class="tb-btn'+(w==="a"?' active':'')+'" type="button" data-kind="tb" data-tb-id="'+id+'" data-tb-idx="0">' + esc(teamLabel(m[0])) + '</button>' +
+              '<button class="tb-btn'+(w==="b"?' active':'')+'" type="button" data-kind="tb" data-tb-id="'+id+'" data-tb-idx="1">' + esc(teamLabel(m[1])) + '</button>' +
+            '</div>' +
+          '</div>';
+      }
+    }
     var when = fmtKickoffShort(KO_SCHEDULE[id]);
     var dateHtml = when ? '<div class="match-date">' + esc(when) + '</div>' : '';
-    return '<div class="match">' + dateHtml + row(m[0], s1, 0, "a") + row(m[1], s2, 1, "b") + '</div>';
+    return '<div class="match">' + dateHtml + row(m[0], s1, 0, "a") + row(m[1], s2, 1, "b") + tieHtml + '</div>';
   }
 
   function pairNext(arr){
@@ -787,7 +856,13 @@
   var app = document.getElementById("app");
   app.addEventListener("click", function(e){
     var btn = e.target.closest("[data-toggle]");
-    if (btn){ var g = btn.getAttribute("data-toggle"); state.open[g] = !state.open[g]; rerender(); }
+    if (btn){ var g = btn.getAttribute("data-toggle"); state.open[g] = !state.open[g]; rerender(); return; }
+    var tb = e.target.closest('[data-kind="tb"]');
+    if (tb){
+      state.koTB[tb.getAttribute("data-tb-id")] = +tb.getAttribute("data-tb-idx");
+      saveState();
+      rerender();
+    }
   });
   app.addEventListener("input", function(e){
     var el = e.target;
@@ -811,7 +886,7 @@
   });
 
   document.getElementById("resetBtn").addEventListener("click", function(){
-    state.matches = buildMatches(); state.ko = {}; saveState(); rerender();
+    state.matches = buildMatches(); state.ko = {}; state.koTB = {}; saveState(); rerender();
   });
 
   // -------------------------------
@@ -844,6 +919,22 @@
     }
     return n;
   }
+  function pickNum(obj, keys){
+    if (!obj) return null;
+    for (var i = 0; i < keys.length; i++){
+      var v = obj[keys[i]];
+      if (v == null || v === "") continue;
+      var n = +v;
+      if (!isNaN(n)) return n;
+    }
+    return null;
+  }
+  function parseKOMethod(detail){
+    var d = String(detail || "").toLowerCase();
+    if (d.indexOf("pen") !== -1 || d.indexOf("shootout") !== -1) return "pens";
+    if (d.indexOf("aet") !== -1 || d.indexOf("extra time") !== -1) return "aet";
+    return null;
+  }
   function teamLocation(name){
     for (var k = 0; k < groups.length; k++){
       var idx = groups[k].teams.indexOf(name);
@@ -866,7 +957,7 @@
   // fixture is recorded this run (so the two data sources don't double-count).
   // dateISO (optional) disambiguates a same-group knockout meeting (e.g. two
   // group-mates in the final) from their single group-stage game.
-  function recordMatch(homeRaw, awayRaw, hs, as, seen, dateISO){
+  function recordMatch(homeRaw, awayRaw, hs, as, seen, dateISO, winnerRaw, method, homePens, awayPens){
     if (hs == null || hs === "" || as == null || as === "") return false;
     var home = mapName(homeRaw), away = mapName(awayRaw);
     var loc = teamLocation(home);
@@ -877,7 +968,35 @@
     if (isKnockout){
       // Knockout game. Lock it by team pair.
       var kkey = koPairKey(home, away);
-      var obj = {}; obj[home] = +hs; obj[away] = +as;
+      var prev = KO_RESULTS[kkey] || null;
+      var obj = {};
+      obj[home] = +hs;
+      obj[away] = +as;
+      var win = mapName(winnerRaw);
+      if (win === home || win === away) obj.winner = win;
+      if (!obj.winner && (+hs !== +as)) obj.winner = (+hs > +as ? home : away);
+      if (method === "pens" || method === "aet") obj.method = method;
+      if (homePens != null && awayPens != null){
+        obj.pens = {}; obj.pens[home] = +homePens; obj.pens[away] = +awayPens;
+        if (!obj.winner && obj.pens[home] !== obj.pens[away]){
+          obj.winner = obj.pens[home] > obj.pens[away] ? home : away;
+        }
+        if (!obj.method) obj.method = "pens";
+      }
+
+      // Merge duplicates from multiple sources (ESPN + TheSportsDB) without
+      // losing already-known winner metadata on drawn 90-minute scores.
+      if (prev){
+        if (!obj.winner && (prev.winner === home || prev.winner === away)) obj.winner = prev.winner;
+        if (!obj.method && (prev.method === "pens" || prev.method === "aet")) obj.method = prev.method;
+        if (!obj.pens && prev.pens && prev.pens[home] != null && prev.pens[away] != null){
+          obj.pens = {}; obj.pens[home] = +prev.pens[home]; obj.pens[away] = +prev.pens[away];
+          if (!obj.winner && obj.pens[home] !== obj.pens[away]){
+            obj.winner = obj.pens[home] > obj.pens[away] ? home : away;
+          }
+        }
+      }
+
       KO_RESULTS[kkey] = obj;
       var isNewK = seen ? !seen["ko-" + kkey] : true;
       if (seen) seen["ko-" + kkey] = true;
@@ -898,7 +1017,16 @@
   function applyTSDB(events, seen){
     var n = 0;
     (events || []).forEach(function(e){
-      if (recordMatch(e.strHomeTeam, e.strAwayTeam, e.intHomeScore, e.intAwayScore, seen, e.dateEvent)) n++;
+      var hs = e.intHomeScore, as = e.intAwayScore;
+      var hp = pickNum(e, ["intHomePenaltyScore", "intHomeScorePen", "intHomeScoreP"]);
+      var ap = pickNum(e, ["intAwayPenaltyScore", "intAwayScorePen", "intAwayScoreP"]);
+      var method = parseKOMethod(e.strStatus || e.strProgress || e.strResult);
+      var winner = null;
+      var wh = String(e.strHomeTeamWin || "").toLowerCase();
+      var wa = String(e.strAwayTeamWin || "").toLowerCase();
+      if (wh === "yes" || wh === "true" || wh === "1") winner = e.strHomeTeam;
+      else if (wa === "yes" || wa === "true" || wa === "1") winner = e.strAwayTeam;
+      if (recordMatch(e.strHomeTeam, e.strAwayTeam, hs, as, seen, e.dateEvent, winner, method, hp, ap)) n++;
     });
     return n;
   }
@@ -913,7 +1041,12 @@
       var h = c.filter(function(x){ return x.homeAway === "home"; })[0];
       var a = c.filter(function(x){ return x.homeAway === "away"; })[0];
       if (!h || !a) return;
-      if (recordMatch(h.team.displayName, a.team.displayName, h.score, a.score, seen, e.date)) n++;
+      var winner = h.winner ? h.team.displayName : (a.winner ? a.team.displayName : null);
+      var detail = (e.status && e.status.type && (e.status.type.detail || e.status.type.shortDetail)) || "";
+      var method = parseKOMethod(detail);
+      var hp = pickNum(h, ["shootoutScore", "penaltyScore", "penalties"]);
+      var ap = pickNum(a, ["shootoutScore", "penaltyScore", "penalties"]);
+      if (recordMatch(h.team.displayName, a.team.displayName, h.score, a.score, seen, e.date, winner, method, hp, ap)) n++;
     });
     return n;
   }
